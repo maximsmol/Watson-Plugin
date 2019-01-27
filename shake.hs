@@ -27,22 +27,17 @@ projectCfg = def
 main :: IO ()
 main = shakeArgs (shakeOptions' (def :: DirCfg)) $ do
   cwd <- liftIO $ getCurrentDirectory
+  let dircfg = projectCfg^.field @"dircfg"
 
   action $ do
-    liftIO $ createDirectoryIfMissing True (projectCfg^.field @"dircfg".field @"bld"</>"report")
+    liftIO $ createDirectoryIfMissing True (dircfg^.field @"bld"</>"report")
 
-  let watsonPluginDirCfg =
-        defaultDircfgForCPPTargetNamed "watsonPlugin"
-          & field @"src" .~ projectCfg^.field @"dircfg".field @"src" </> "watson"
-  let watsonPluginBaseLib = "watson"</>"bin"</>"base"<.>"dylib"
   let watsonPluginCPPTargetCfg =
         (def :: CPPTargetCfg)
-          & field @"name" .~ "watsonPlugin"
-          & field @"dircfgOverride" .~ Just watsonPluginDirCfg
-          & field @"publicCPPObjs" .~ [watsonPluginBaseLib]
+          & field @"name" .~ "base"
   let watsonPluginCPPSourceCfg =
         (def :: CPPSourceCfg)
-          & field @"fromInTarget" .~ ["watson.cpp", "**/*.cpp"]
+          & field @"fromInTarget" .~ ["plugin.cpp"]
   let watsonPluginCPPIncludeListing =
         (def :: CPPIncludeListing)
           & field @"fromInTarget" .~ ["."]
@@ -81,18 +76,24 @@ main = shakeArgs (shakeOptions' (def :: DirCfg)) $ do
           & field @"common" <>~ ["-m32", "-arch", "i386"] -- todo: do this only for x86 targets
   let watsonPluginCPPLinkBuildCfg =
         (def :: CPPLinkBuildCfg)
-          & field @"name" .~ "watson"<.>"dylib"
+          & field @"name" .~ "bin"<.>"dylib"
           & field @"target" .~ watsonPluginCPPTargetCfg
           & field @"objs" .~ watsonPluginCPPObjSourceCfg
           & field @"flags" .~ watsonPluginCPPLinkBuildFlagCfg
   genCPPLinkBuildRules watsonPluginCPPLinkBuildCfg
 
-  let pluginDylib = dircfgForCPPTarget watsonPluginCPPTargetCfg^. field @"dist"</>watsonPluginBaseLib
-  pluginDylib %> \out -> do
-    need [getCPPLinkPrimaryBuildOut watsonPluginCPPLinkBuildCfg]
-    cmd_ "ln" "-sf" [cwd</>getCPPLinkPrimaryBuildOut watsonPluginCPPLinkBuildCfg] out
+  let watsonPluginDistDir = dircfg^.field @"dist"</>"watson"
+  let watsonPluginBinDir = watsonPluginDistDir</>"bin"
+  let watsonPluginBaseDylib = watsonPluginBinDir</>"base"<.>"dylib"
+  let watsonPluginVdf = dircfg^.field @"dist"</>"watson"<.>"vdf"
 
-  want [pluginDylib]
+  linkToDistRules (getCPPLinkPrimaryBuildOut watsonPluginCPPLinkBuildCfg) watsonPluginBaseDylib
+  linkToDistRules (dircfg^.field @"res"</>"watson.vdf") watsonPluginVdf
+
+  phony watsonPluginDistDir $ do
+    need [watsonPluginBaseDylib, watsonPluginVdf]
+
+  want [watsonPluginDistDir]
 
   return ()
 
@@ -496,6 +497,13 @@ getCPPLinkBuildOuts cfg =
   where
     dircfg :: DirCfg
     dircfg = dircfgForCPPLinkBuild cfg
+
+linkToDistRules :: FilePath -> FilePath -> Rules ()
+linkToDistRules inp out =
+  out %> \_ -> do
+    cwd <- liftIO $ getCurrentDirectory
+    need [inp]
+    cmd_ "ln" "-sf" [cwd</>inp] out
 
 dropKnownDirname :: FilePath -> FilePath -> FilePath
 dropKnownDirname base x = joinPath $ dropDir (splitPath base) (splitPath x)
