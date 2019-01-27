@@ -37,7 +37,7 @@ main = shakeArgs (shakeOptions' (def :: DirCfg)) $ do
           & field @"name" .~ "base"
   let watsonPluginCPPSourceCfg =
         (def :: CPPSourceCfg)
-          & field @"fromInTarget" .~ ["plugin.cpp"]
+          & field @"fromInTarget" .~ ((<.> "cpp") <$> ["MMPlugin", "base", "log"])
   let watsonPluginCPPIncludeListing =
         (def :: CPPIncludeListing)
           & field @"fromInTarget" .~ ["."]
