@@ -1,4 +1,4 @@
-#include "hpp/base.hpp"
+#include "hpp/Base.hpp"
 
 #include <dbg.h>
 
@@ -7,6 +7,17 @@ namespace watson {
     return *detail_::baseInstance;
   }
 
+  Base::Base(ISmmAPI* mmAPI,
+             PluginId plguinId,
+             SourceHook::ISourceHook* srcHook,
+             ISmmPlugin* mmPluginBase) :
+    mmAPI_(mmAPI),
+    pluginId_(plguinId),
+    srcHook_(srcHook),
+    mmPluginBase_(mmPluginBase)
+  {}
+
+  // ISmmPlugin
   SourceHook::ISourceHook* Base::srcHook() const {
     return srcHook_;
   }
@@ -20,31 +31,30 @@ namespace watson {
     return pluginId_;
   }
 
-  Base::Base(ISmmAPI* mmAPI,
-             PluginId plguinId,
-             SourceHook::ISourceHook* srcHook,
-             ISmmPlugin* mmPluginBase) :
-    mmAPI_(mmAPI),
-    pluginId_(plguinId),
-    srcHook_(srcHook),
-    mmPluginBase_(mmPluginBase)
-  {}
-
-  bool Base::load(char* err, size_t errLen, bool late) {
-    mmAPI()->ConPrintf("Watson Base loaded. late = %d", late);
+  bool Base::load_(char* err, size_t errLen, bool late) {
+    mmAPI()->ConPrintf("Watson Base loaded. late = %d\n", late);
 
     return true;
   }
-  bool Base::unload(char* err, size_t errLen) {
+  bool Base::unload_(char* err, size_t errLen) {
     return true;
   }
 
-  bool Base::pause(char* err, size_t errLen) {
+  bool Base::pause_(char* err, size_t errLen) {
     return true;
   }
-  bool Base::unpause(char* err, size_t errLen) {
+  bool Base::unpause_(char* err, size_t errLen) {
     return true;
   }
 
-  void Base::allPluginsLoaded() {}
+  void Base::allPluginsLoaded_() {}
+
+  // IMetamodListener
+  IServerPluginCallbacks* Base::pluginCbs() const {
+    return pluginCbs_;
+  }
+
+  void Base::acquiredPluginCbs_() {
+    mmAPI()->ConPrintf("Acquired IServerPluginCallbacks\n");
+  }
 }

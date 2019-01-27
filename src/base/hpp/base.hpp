@@ -13,6 +13,7 @@ namespace watson {
       ISmmPlugin* mmPluginBase() const;
       PluginId pluginId() const;
 
+      IServerPluginCallbacks* pluginCbs() const;
     private:
       friend struct MMPlugin;
 
@@ -21,18 +22,23 @@ namespace watson {
            SourceHook::ISourceHook* srcHook,
            ISmmPlugin* mmPluginBase);
 
+      // ISmmPlugin
       ISmmAPI* mmAPI_;
       PluginId pluginId_;
       SourceHook::ISourceHook* srcHook_;
       ISmmPlugin* mmPluginBase_;
 
-      bool load(char* err, size_t errLen, bool late);
-      bool unload(char* err, size_t errLen);
+      bool load_(char* err, size_t errLen, bool late);
+      bool unload_(char* err, size_t errLen);
 
-      bool pause(char* err, size_t errLen);
-      bool unpause(char* err, size_t errLen);
+      bool pause_(char* err, size_t errLen);
+      bool unpause_(char* err, size_t errLen);
 
-      void allPluginsLoaded();
+      void allPluginsLoaded_();
+
+      // IMetamodListener
+      IServerPluginCallbacks* pluginCbs_;
+      void acquiredPluginCbs_();
   };
   namespace detail_ {
     extern Base* baseInstance;
