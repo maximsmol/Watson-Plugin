@@ -1,5 +1,5 @@
 "Metamod Plugin"
 {
-	"alias"		"sample"
-	"file"		"addons/sample_mm"
+	"alias"		"watson"
+	"file"		"addons/watson/bin/base"
 }
