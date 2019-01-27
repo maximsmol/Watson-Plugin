@@ -13,7 +13,7 @@ import GHC.Generics
 import Data.Default
 import Control.Lens hiding ((<.>))
 import Data.Generics.Product
-import System.Directory(createDirectoryIfMissing)
+import System.Directory(createDirectoryIfMissing, getCurrentDirectory)
 import Data.List.Extra(stripSuffix)
 
 import Development.Shake
@@ -26,11 +26,13 @@ projectConfig = def
 
 main :: IO ()
 main = shakeArgs (shakeOptions' (def :: DirCfg)) $ do
+  cwd <- liftIO $ getCurrentDirectory
+
   action $ do
     liftIO $ createDirectoryIfMissing True (projectConfig^.field @"dirconfig".field @"bld"</>"report")
 
   let watsonPluginDirCfg =
-        (def :: DirCfg)
+        defaultDircfgForCPPTargetNamed "watsonPlugin"
           & field @"src" .~ projectConfig^.field @"dirconfig".field @"src" </> "watson"
   let watsonPluginCPPTargetCfg =
         (def :: CPPTargetConfig)
@@ -78,13 +80,18 @@ main = shakeArgs (shakeOptions' (def :: DirCfg)) $ do
           & field @"common" <>~ ["-m32", "-arch", "i386"] -- todo: do this only for x86 targets
   let watsonPluginCPPLinkBuildCfg =
         (def :: CPPLinkBuildConfig)
-          & field @"name" .~ "watson.dylib"
+          & field @"name" .~ "watson"<.>"dylib"
           & field @"target" .~ watsonPluginCPPTargetCfg
           & field @"objs" .~ watsonPluginCPPObjSourceCfg
           & field @"flags" .~ watsonPluginCPPLinkBuildFlagCfg
   genCPPLinkBuildRules watsonPluginCPPLinkBuildCfg
 
-  want [getCPPLinkPrimaryBuildOut watsonPluginCPPLinkBuildCfg]
+  let pluginDylib = dirconfigForCPPTarget watsonPluginCPPTargetCfg^. field @"dist"</>"watson"</>"bin"</>"base"<.>"dylib"
+  pluginDylib %> \out -> do
+    need [getCPPLinkPrimaryBuildOut watsonPluginCPPLinkBuildCfg]
+    cmd_ "ln" "-sf" [cwd</>getCPPLinkPrimaryBuildOut watsonPluginCPPLinkBuildCfg] out
+
+  want [pluginDylib]
 
   return ()
 
@@ -203,14 +210,15 @@ data CPPTargetConfig = CPPTargetConfig {
   publicCPPObjs :: [FilePath],
   publicCPPSources :: [FilePath]
 } deriving (Generic, Default, Show)
+defaultDircfgForCPPTargetNamed :: String -> DirCfg
+defaultDircfgForCPPTargetNamed name =
+  foldr (\l cfg-> over l (</> name) cfg) (projectConfig^.field @"dirconfig") [field @"src", field @"bld", field @"dist"]
+
 dirconfigForCPPTarget :: CPPTargetConfig -> DirCfg
 dirconfigForCPPTarget cfg =
   case cfg^.field @"dirconfigOverride" of
     Just x -> x
-    Nothing -> foldr (\l cfg-> over l (</> name) cfg) (projectConfig^.field @"dirconfig") [field @"src", field @"bld", field @"dist"]
-  where
-    name :: String
-    name = cfg^.field @"name"
+    Nothing -> defaultDircfgForCPPTargetNamed $ cfg^.field @"name"
 
 data CPPIncludeListing = CPPIncludeListing {
   fromInTarget :: [FilePath],
@@ -476,7 +484,7 @@ dirconfigForCPPLinkBuild :: CPPLinkBuildConfig -> DirCfg
 dirconfigForCPPLinkBuild cfg =
   case cfg^.field @"dirconfigOverride" of
     Just x -> x
-    Nothing -> over (field @"bld") (</> "cpp_bin" </> cfg^.field @"target".field @"name") (dirconfigForCPPTarget $ cfg^.field @"target")
+    Nothing -> over (field @"bld") (</> "cpp_bin") (dirconfigForCPPTarget $ cfg^.field @"target")
 
 getCPPLinkPrimaryBuildOut :: CPPLinkBuildConfig -> FilePath
 getCPPLinkPrimaryBuildOut cfg = (dirconfigForCPPLinkBuild cfg)^.field @"bld"</>cfg^.field @"name"
