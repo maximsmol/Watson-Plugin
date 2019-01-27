@@ -21,24 +21,25 @@ import Development.Shake.FilePath
 import Development.Shake.Util
 
 
-projectConfig :: ProjectConfig
-projectConfig = def
+projectCfg :: ProjectCfg
+projectCfg = def
 
 main :: IO ()
 main = shakeArgs (shakeOptions' (def :: DirCfg)) $ do
   cwd <- liftIO $ getCurrentDirectory
 
   action $ do
-    liftIO $ createDirectoryIfMissing True (projectConfig^.field @"dirconfig".field @"bld"</>"report")
+    liftIO $ createDirectoryIfMissing True (projectCfg^.field @"dircfg".field @"bld"</>"report")
 
   let watsonPluginDirCfg =
         defaultDircfgForCPPTargetNamed "watsonPlugin"
-          & field @"src" .~ projectConfig^.field @"dirconfig".field @"src" </> "watson"
+          & field @"src" .~ projectCfg^.field @"dircfg".field @"src" </> "watson"
+  let watsonPluginBaseLib = "watson"</>"bin"</>"base"<.>"dylib"
   let watsonPluginCPPTargetCfg =
-        (def :: CPPTargetConfig)
+        (def :: CPPTargetCfg)
           & field @"name" .~ "watsonPlugin"
-          & field @"dirconfigOverride" .~ Just watsonPluginDirCfg
-          & field @"publicCPPObjs" .~ ["./watson.dylib"]
+          & field @"dircfgOverride" .~ Just watsonPluginDirCfg
+          & field @"publicCPPObjs" .~ [watsonPluginBaseLib]
   let watsonPluginCPPSourceCfg =
         (def :: CPPSourceCfg)
           & field @"fromInTarget" .~ ["watson.cpp", "**/*.cpp"]
@@ -50,11 +51,11 @@ main = shakeArgs (shakeOptions' (def :: DirCfg)) $ do
         (def :: CPPIncludeListing)
           & field @"fromWorld" .~ ["mmsource"</>"core", "mmsource"</>"core"</>"sourcehook"] ++ sdkIncludes
   let watsonPluginCPPIncludeCfg =
-        (def :: CPPIncludeConfig)
+        (def :: CPPIncludeCfg)
           & field @"warn" .~ watsonPluginCPPIncludeListing
           & field @"noWarn" .~ watsonPluginCPPSysIncludeListing
   let watsonPluginCPPObjBuildFlagCfg =
-        defaultCPPObjectBuildFlagConfig
+        defaultCPPObjectBuildFlagCfg
           & field @"common" <>~ (("-D"++) <$> ["POSIX", "OSX"])
           & field @"common" <>~ ((\x -> "-D" ++ x^.field @"define" ++ "=" ++ (show $ x^.field @"code")) <$> sdks)
           & field @"common" <>~ ["-DSOURCE_ENGINE=" ++ show 11]
@@ -62,7 +63,7 @@ main = shakeArgs (shakeOptions' (def :: DirCfg)) $ do
 
           & field @"common" <>~ ["-m32"] -- todo: do this only for x86 targets
   let watsonPluginCPPObjBuildCfg =
-        (def :: CPPObjBuildConfig)
+        (def :: CPPObjBuildCfg)
           & field @"target" .~ watsonPluginCPPTargetCfg
           & field @"srcs" .~ watsonPluginCPPSourceCfg
           & field @"includes" .~ watsonPluginCPPIncludeCfg
@@ -70,23 +71,23 @@ main = shakeArgs (shakeOptions' (def :: DirCfg)) $ do
   genCPPObjBuildRules watsonPluginCPPObjBuildCfg
 
   let watsonPluginCPPObjSourceCfg =
-        (def :: CPPObjSourceConfig)
+        (def :: CPPObjSourceCfg)
           & field @"fromCPPObjBuild" .~ [watsonPluginCPPObjBuildCfg]
           & field @"fromWorld" .~ ((("sdk"</>"hl2sdk-tf2"</>"lib"</>"mac") </>) <$> ["libtier0.dylib", "libvstdlib.dylib", "tier1_i486.a"])
   let watsonPluginCPPLinkBuildFlagCfg =
-        defaultCPPLinkBuildFlagConfig
+        defaultCPPLinkBuildFlagCfg
           & field @"common" <>~ ["-dynamiclib"]
 
           & field @"common" <>~ ["-m32", "-arch", "i386"] -- todo: do this only for x86 targets
   let watsonPluginCPPLinkBuildCfg =
-        (def :: CPPLinkBuildConfig)
+        (def :: CPPLinkBuildCfg)
           & field @"name" .~ "watson"<.>"dylib"
           & field @"target" .~ watsonPluginCPPTargetCfg
           & field @"objs" .~ watsonPluginCPPObjSourceCfg
           & field @"flags" .~ watsonPluginCPPLinkBuildFlagCfg
   genCPPLinkBuildRules watsonPluginCPPLinkBuildCfg
 
-  let pluginDylib = dirconfigForCPPTarget watsonPluginCPPTargetCfg^. field @"dist"</>"watson"</>"bin"</>"base"<.>"dylib"
+  let pluginDylib = dircfgForCPPTarget watsonPluginCPPTargetCfg^. field @"dist"</>watsonPluginBaseLib
   pluginDylib %> \out -> do
     need [getCPPLinkPrimaryBuildOut watsonPluginCPPLinkBuildCfg]
     cmd_ "ln" "-sf" [cwd</>getCPPLinkPrimaryBuildOut watsonPluginCPPLinkBuildCfg] out
@@ -175,15 +176,15 @@ shakeOptions' dc = shakeOptions{
   }
   where
     bldPath :: FilePath
-    bldPath = projectConfig^.field @"dirconfig".field @"bld"
+    bldPath = projectCfg^.field @"dircfg".field @"bld"
 
 
-data ProjectConfig = ProjectConfig {
-  dirconfig :: DirCfg,
+data ProjectCfg = ProjectCfg {
+  dircfg :: DirCfg,
   clangCompDB :: String
 } deriving (Generic, Show)
-instance Default ProjectConfig where
-  def = ProjectConfig {dirconfig = def, clangCompDB = (def :: DirCfg)^.field @"bld" </> "compile_commands.json"}
+instance Default ProjectCfg where
+  def = ProjectCfg {dircfg = def, clangCompDB = (def :: DirCfg)^.field @"bld" </> "compile_commands.json"}
 
 data DirCfg = DirCfg {
   src :: FilePath,
@@ -202,9 +203,9 @@ instance Default DirCfg where
   }
 
 
-data CPPTargetConfig = CPPTargetConfig {
+data CPPTargetCfg = CPPTargetCfg {
   name :: String,
-  dirconfigOverride :: Maybe DirCfg,
+  dircfgOverride :: Maybe DirCfg,
 
   publicIncludeDirs :: [FilePath],
   publicCPPObjs :: [FilePath],
@@ -212,21 +213,21 @@ data CPPTargetConfig = CPPTargetConfig {
 } deriving (Generic, Default, Show)
 defaultDircfgForCPPTargetNamed :: String -> DirCfg
 defaultDircfgForCPPTargetNamed name =
-  foldr (\l cfg-> over l (</> name) cfg) (projectConfig^.field @"dirconfig") [field @"src", field @"bld", field @"dist"]
+  foldr (\l cfg-> over l (</> name) cfg) (projectCfg^.field @"dircfg") [field @"src", field @"bld", field @"dist"]
 
-dirconfigForCPPTarget :: CPPTargetConfig -> DirCfg
-dirconfigForCPPTarget cfg =
-  case cfg^.field @"dirconfigOverride" of
+dircfgForCPPTarget :: CPPTargetCfg -> DirCfg
+dircfgForCPPTarget cfg =
+  case cfg^.field @"dircfgOverride" of
     Just x -> x
     Nothing -> defaultDircfgForCPPTargetNamed $ cfg^.field @"name"
 
 data CPPIncludeListing = CPPIncludeListing {
   fromInTarget :: [FilePath],
-  fromOtherTarget :: [CPPTargetConfig],
+  fromOtherTarget :: [CPPTargetCfg],
   fromWorld :: [FilePath],
   fromUnportablePath :: [FilePath]
 } deriving (Generic, Default, Show)
-cppIncludeListingToPaths :: CPPTargetConfig -> CPPIncludeListing -> [FilePath]
+cppIncludeListingToPaths :: CPPTargetCfg -> CPPIncludeListing -> [FilePath]
 cppIncludeListingToPaths tcfg ilist =
   join $
     [(ilist^.field @"fromUnportablePath")] ++
@@ -235,28 +236,28 @@ cppIncludeListingToPaths tcfg ilist =
     (includePathsForTarget <$> (ilist^.field @"fromOtherTarget"))
   where
     tdircfg :: DirCfg
-    tdircfg = dirconfigForCPPTarget tcfg
+    tdircfg = dircfgForCPPTarget tcfg
 
-    includePathsForTarget :: CPPTargetConfig -> [FilePath]
+    includePathsForTarget :: CPPTargetCfg -> [FilePath]
     includePathsForTarget tcfg =
-      let dircfg = dirconfigForCPPTarget tcfg
+      let dircfg = dircfgForCPPTarget tcfg
       in (dircfg^.field @"dist" </>) <$> tcfg^.field @"publicIncludeDirs"
 
-data CPPIncludeConfig = CPPIncludeConfig {
+data CPPIncludeCfg = CPPIncludeCfg {
   warn :: CPPIncludeListing,
   noWarn :: CPPIncludeListing
 } deriving (Generic, Default, Show)
 
 
-data CPPFlagConfig = CPPFlagConfig {
+data CPPFlagCfg = CPPFlagCfg {
   common :: [String],
   debug :: [String],
   release :: [String]
 } deriving (Generic, Default, Show)
 
-defaultCPPObjectBuildFlagConfig :: CPPFlagConfig
-defaultCPPObjectBuildFlagConfig =
-  CPPFlagConfig {
+defaultCPPObjectBuildFlagCfg :: CPPFlagCfg
+defaultCPPObjectBuildFlagCfg =
+  CPPFlagCfg {
     common = defaultCommon,
     debug = ["-O0", "-g", "-glldb"],
     release = ["-Ofast"]
@@ -276,11 +277,11 @@ defaultCPPObjectBuildFlagConfig =
 
 data CPPSourceCfg = CPPSourceCfg {
   fromInTarget :: [FilePath],
-  fromOtherTarget :: [CPPTargetConfig],
+  fromOtherTarget :: [CPPTargetCfg],
   fromWorld :: [FilePath],
   fromUnportablePath :: [FilePath]
 } deriving (Generic, Default, Show)
-cppSourceCfgToPatterns :: CPPTargetConfig -> CPPSourceCfg -> [Pattern]
+cppSourceCfgToPatterns :: CPPTargetCfg -> CPPSourceCfg -> [Pattern]
 cppSourceCfgToPatterns tcfg cfg =
   let strs = join $
         [(tdircfg^.field @"src"</>) <$> (cfg^.field @"fromInTarget")] ++
@@ -290,47 +291,47 @@ cppSourceCfgToPatterns tcfg cfg =
   in compile <$> strs
   where
     tdircfg :: DirCfg
-    tdircfg = dirconfigForCPPTarget tcfg
+    tdircfg = dircfgForCPPTarget tcfg
 
-    srcPatternsForTarget :: CPPTargetConfig -> [String]
+    srcPatternsForTarget :: CPPTargetCfg -> [String]
     srcPatternsForTarget tcfg =
-      let dircfg = dirconfigForCPPTarget tcfg
+      let dircfg = dircfgForCPPTarget tcfg
       in (dircfg^.field @"dist" </>) <$> tcfg^.field @"publicCPPSources"
-cppSourceCfgToPaths :: CPPTargetConfig -> CPPSourceCfg -> IO [FilePath]
+cppSourceCfgToPaths :: CPPTargetCfg -> CPPSourceCfg -> IO [FilePath]
 cppSourceCfgToPaths tcfg cfg =
   dedup <$> join <$> globDir (cppSourceCfgToPatterns tcfg cfg) "."
 
-data CPPObjBuildConfig = CPPObjBuildConfig {
-  target :: CPPTargetConfig,
-  dirconfigOverride :: Maybe DirCfg,
+data CPPObjBuildCfg = CPPObjBuildCfg {
+  target :: CPPTargetCfg,
+  dircfgOverride :: Maybe DirCfg,
   srcs :: CPPSourceCfg,
 
-  includes :: CPPIncludeConfig,
+  includes :: CPPIncludeCfg,
   compiler :: String,
   debug :: Bool,
-  flags :: CPPFlagConfig
+  flags :: CPPFlagCfg
 } deriving (Generic, Show)
-instance Default CPPObjBuildConfig where
-  def = CPPObjBuildConfig {
+instance Default CPPObjBuildCfg where
+  def = CPPObjBuildCfg {
       target = def,
-      dirconfigOverride = def,
+      dircfgOverride = def,
       srcs = def,
 
       includes = def,
       compiler = "clang++",
       debug = True,
-      flags = defaultCPPObjectBuildFlagConfig
+      flags = defaultCPPObjectBuildFlagCfg
     }
 
-findCPPObjectBuildOuts :: CPPObjBuildConfig -> IO [FilePath]
+findCPPObjectBuildOuts :: CPPObjBuildCfg -> IO [FilePath]
 findCPPObjectBuildOuts cfg = do
-  let outFromSrc = \x -> dirconfig^.field @"bld"</>dropKnownDirname (dirconfig^.field @"src") x-<.>"o"
+  let outFromSrc = \x -> dircfg^.field @"bld"</>dropKnownDirname (dircfg^.field @"src") x-<.>"o"
   (fmap outFromSrc) <$> cppSourceCfgToPaths (cfg^.field @"target") (cfg^.field @"srcs")
   where
-    dirconfig :: DirCfg
-    dirconfig = dirconfigForCPPObjBuild cfg
+    dircfg :: DirCfg
+    dircfg = dircfgForCPPObjBuild cfg
 
-genCPPObjBuildRules :: CPPObjBuildConfig -> Rules ()
+genCPPObjBuildRules :: CPPObjBuildCfg -> Rules ()
 genCPPObjBuildRules cfg = do
   files <- liftIO $ findCPPObjectBuildOuts cfg
 
@@ -344,15 +345,15 @@ genCPPObjBuildRules cfg = do
   fmap clangCDBFromOut files |%> \x -> need [outFromClangCDB x]
 
   where
-    tcfg :: CPPTargetConfig
+    tcfg :: CPPTargetCfg
     tcfg = cfg^.field @"target"
 
 
-    dirconfig :: DirCfg
-    dirconfig = dirconfigForCPPObjBuild cfg
+    dircfg :: DirCfg
+    dircfg = dircfgForCPPObjBuild cfg
 
     bldDir :: FilePath
-    bldDir = dirconfig^.field @"bld"
+    bldDir = dircfg^.field @"bld"
     gendDepDir :: FilePath
     gendDepDir = bldDir</>"gendDep"
     clangCDBDir :: FilePath
@@ -362,7 +363,7 @@ genCPPObjBuildRules cfg = do
     buildFn out dep clangCDB = do
       liftIO $ forM_ (takeDirectory <$> [out, dep, clangCDB]) (createDirectoryIfMissing True)
 
-      let src = (dirconfig^.field @"src")</>dropKnownDirname (dirconfig^.field @"bld") out-<.>"cpp"
+      let src = (dircfg^.field @"src")</>dropKnownDirname (dircfg^.field @"bld") out-<.>"cpp"
       need [src]
 
       let command =
@@ -378,22 +379,22 @@ genCPPObjBuildRules cfg = do
 
       cmd_ command "-MJ" [clangCDB] "-c" [src]
       return ()
-dirconfigForCPPObjBuild :: CPPObjBuildConfig -> DirCfg
-dirconfigForCPPObjBuild cfg =
-  case cfg^.field @"dirconfigOverride" of
+dircfgForCPPObjBuild :: CPPObjBuildCfg -> DirCfg
+dircfgForCPPObjBuild cfg =
+  case cfg^.field @"dircfgOverride" of
     Just x -> x
-    Nothing -> over (field @"bld") (</> "cpp_o") (dirconfigForCPPTarget $ cfg^.field @"target")
+    Nothing -> over (field @"bld") (</> "cpp_o") (dircfgForCPPTarget $ cfg^.field @"target")
 
 
-data CPPObjSourceConfig = CPPObjSourceConfig {
+data CPPObjSourceCfg = CPPObjSourceCfg {
   fromInTarget :: [FilePath],
-  fromOtherTarget :: [CPPTargetConfig],
+  fromOtherTarget :: [CPPTargetCfg],
   fromWorld :: [FilePath],
   fromUnportablePath :: [FilePath],
-  fromCPPObjBuild :: [CPPObjBuildConfig]
+  fromCPPObjBuild :: [CPPObjBuildCfg]
 } deriving (Generic, Default, Show)
-cppObjSourceConfigToPaths :: CPPTargetConfig -> CPPObjSourceConfig -> IO [FilePath]
-cppObjSourceConfigToPaths tcfg cfg = do
+cppObjSourceCfgToPaths :: CPPTargetCfg -> CPPObjSourceCfg -> IO [FilePath]
+cppObjSourceCfgToPaths tcfg cfg = do
   cppObjBuildOuts <- mapM findCPPObjectBuildOuts (cfg^.field @"fromCPPObjBuild")
   return . join $
     [(tdircfg^.field @"src"</>) <$> (cfg^.field @"fromInTarget")] ++
@@ -403,11 +404,11 @@ cppObjSourceConfigToPaths tcfg cfg = do
     cppObjBuildOuts
   where
     tdircfg :: DirCfg
-    tdircfg = dirconfigForCPPTarget tcfg
+    tdircfg = dircfgForCPPTarget tcfg
 
-    objPathsForTarget :: CPPTargetConfig -> [FilePath]
+    objPathsForTarget :: CPPTargetCfg -> [FilePath]
     objPathsForTarget tcfg =
-      let dircfg = dirconfigForCPPTarget tcfg
+      let dircfg = dircfgForCPPTarget tcfg
       in (dircfg^.field @"dist" </>) <$> tcfg^.field @"publicCPPObjs"
 
 
@@ -415,53 +416,53 @@ data CPPLibSearchPathCfg = CPPLibSearchPathCfg {
   fromWorld :: [FilePath],
   fromUnportablePath :: [FilePath]
 } deriving (Generic, Default, Show)
-cppLibSearchPathCfgToPaths :: CPPTargetConfig -> CPPLibSearchPathCfg -> [FilePath]
+cppLibSearchPathCfgToPaths :: CPPTargetCfg -> CPPLibSearchPathCfg -> [FilePath]
 cppLibSearchPathCfgToPaths tcfg cfg =
   ((tdircfg^.field @"world" </>) <$> (cfg^.field @"fromWorld")) ++ (cfg^.field @"fromUnportablePath")
   where
     tdircfg :: DirCfg
-    tdircfg = dirconfigForCPPTarget tcfg
+    tdircfg = dircfgForCPPTarget tcfg
 data CPPLostLibCfg = CPPLostLibCfg {
   names :: [String],
   searchPath :: CPPLibSearchPathCfg
 } deriving (Generic, Default, Show)
 
-data CPPLinkBuildConfig = CPPLinkBuildConfig {
+data CPPLinkBuildCfg = CPPLinkBuildCfg {
   name :: String,
-  target :: CPPTargetConfig,
-  dirconfigOverride :: Maybe DirCfg,
-  objs :: CPPObjSourceConfig,
+  target :: CPPTargetCfg,
+  dircfgOverride :: Maybe DirCfg,
+  objs :: CPPObjSourceCfg,
 
   lostLibs :: CPPLostLibCfg,
   linker :: String,
   debug :: Bool,
-  flags :: CPPFlagConfig
+  flags :: CPPFlagCfg
 } deriving (Generic, Show)
-instance Default CPPLinkBuildConfig where
-  def = CPPLinkBuildConfig {
+instance Default CPPLinkBuildCfg where
+  def = CPPLinkBuildCfg {
       name = "dist",
       target = def,
-      dirconfigOverride = def,
+      dircfgOverride = def,
       objs = def,
 
       lostLibs = def,
       linker = "clang++",
       debug = True,
-      flags = defaultCPPLinkBuildFlagConfig
+      flags = defaultCPPLinkBuildFlagCfg
     }
 
-defaultCPPLinkBuildFlagConfig :: CPPFlagConfig
-defaultCPPLinkBuildFlagConfig =
-  CPPFlagConfig {
+defaultCPPLinkBuildFlagCfg :: CPPFlagCfg
+defaultCPPLinkBuildFlagCfg =
+  CPPFlagCfg {
     common = [],
     debug = [],
     release = []
   }
 
-genCPPLinkBuildRules :: CPPLinkBuildConfig -> Rules ()
+genCPPLinkBuildRules :: CPPLinkBuildCfg -> Rules ()
 genCPPLinkBuildRules cfg =
   getCPPLinkPrimaryBuildOut cfg %> \out -> do
-    srcs <- liftIO $ cppObjSourceConfigToPaths tcfg (cfg^.field @"objs")
+    srcs <- liftIO $ cppObjSourceCfgToPaths tcfg (cfg^.field @"objs")
     need srcs
 
     let command =
@@ -475,26 +476,26 @@ genCPPLinkBuildRules cfg =
     cmd_ command srcs
     return ()
   where
-    tcfg :: CPPTargetConfig
+    tcfg :: CPPTargetCfg
     tcfg = cfg^.field @"target"
 
-    dirconfig :: DirCfg
-    dirconfig = dirconfigForCPPLinkBuild cfg
-dirconfigForCPPLinkBuild :: CPPLinkBuildConfig -> DirCfg
-dirconfigForCPPLinkBuild cfg =
-  case cfg^.field @"dirconfigOverride" of
+    dircfg :: DirCfg
+    dircfg = dircfgForCPPLinkBuild cfg
+dircfgForCPPLinkBuild :: CPPLinkBuildCfg -> DirCfg
+dircfgForCPPLinkBuild cfg =
+  case cfg^.field @"dircfgOverride" of
     Just x -> x
-    Nothing -> over (field @"bld") (</> "cpp_bin") (dirconfigForCPPTarget $ cfg^.field @"target")
+    Nothing -> over (field @"bld") (</> "cpp_bin") (dircfgForCPPTarget $ cfg^.field @"target")
 
-getCPPLinkPrimaryBuildOut :: CPPLinkBuildConfig -> FilePath
-getCPPLinkPrimaryBuildOut cfg = (dirconfigForCPPLinkBuild cfg)^.field @"bld"</>cfg^.field @"name"
+getCPPLinkPrimaryBuildOut :: CPPLinkBuildCfg -> FilePath
+getCPPLinkPrimaryBuildOut cfg = (dircfgForCPPLinkBuild cfg)^.field @"bld"</>cfg^.field @"name"
 
-getCPPLinkBuildOuts :: CPPLinkBuildConfig -> [FilePath]
+getCPPLinkBuildOuts :: CPPLinkBuildCfg -> [FilePath]
 getCPPLinkBuildOuts cfg =
   [getCPPLinkPrimaryBuildOut cfg]
   where
-    dirconfig :: DirCfg
-    dirconfig = dirconfigForCPPLinkBuild cfg
+    dircfg :: DirCfg
+    dircfg = dircfgForCPPLinkBuild cfg
 
 dropKnownDirname :: FilePath -> FilePath -> FilePath
 dropKnownDirname base x = joinPath $ dropDir (splitPath base) (splitPath x)
