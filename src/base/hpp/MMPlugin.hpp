@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ISmmPlugin.h>
+#include "ISmmPlugin.hpp"
 
 namespace watson {
   struct MMPlugin : public ISmmPlugin, public IMetamodListener

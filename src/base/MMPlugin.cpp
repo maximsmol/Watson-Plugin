@@ -15,10 +15,10 @@ PL_EXPOSURE_FUNC(watson::MMPlugin, pluginInstance);
 
 namespace watson {
   // ISmmPlugin
-  Base* detail_::baseInstance = nullptr;
+  Base* base::detail_::baseInstance = nullptr;
 
   bool MMPlugin::Load(PluginId id, ISmmAPI* ismm, char* err, size_t errLen, bool late) {
-    detail_::baseInstance = new Base(
+    base::detail_::baseInstance = new Base(
       ismm,
       id,
       static_cast<SourceHook::ISourceHook*>(ismm->MetaFactory(MMIFACE_SOURCEHOOK, nullptr, nullptr)),
@@ -38,7 +38,7 @@ namespace watson {
   bool MMPlugin::Unload(char* err, size_t errLen) {
     bool res = Base::i().unload_(err, errLen);
 
-    delete detail_::baseInstance;
+    delete base::detail_::baseInstance;
     return res;
   }
 
@@ -50,7 +50,7 @@ namespace watson {
   }
 
   void MMPlugin::AllPluginsLoaded() {
-    Base::i().allPluginsLoaded_();
+    Base::i().allPluginsLoad_();
   }
 
   const char* MMPlugin::GetLicense() {

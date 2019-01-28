@@ -1,0 +1,14 @@
+MMPlugin, Base:
+  Assumptions:
+    - Load must be the first function called on ISmmPlugin.
+      - Must be called before Pause, Unpause, AllPluginsLoaded, Unload
+    - OnVSPListening must never be called after Unload
+
+  Limitations:
+    - Plugins may not always receive Unload, Pause, Unpause if they depend on OnVSPListening
+      - Because it is assumed that these can precede OnVSPListening
+      - Plugins will always receive AllPluginsLoaded, even if it occurs before OnVSPLsitening
+
+  ToDo:
+    - Handle ISmmPlugin events' bool return status
+    - Load done in OnVSPListening cannot pass err or errLen, so currently we just pass nullptr and 0. Also must ignore return value

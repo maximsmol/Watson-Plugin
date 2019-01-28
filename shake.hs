@@ -32,24 +32,23 @@ main = shakeArgs (shakeOptions' (def :: DirCfg)) $ do
   action $ do
     liftIO $ createDirectoryIfMissing True (dircfg^.field @"bld"</>"report")
 
-  let watsonPluginCPPTargetCfg =
-        (def :: CPPTargetCfg)
-          & field @"name" .~ "base"
-  let watsonPluginCPPSourceCfg =
-        (def :: CPPSourceCfg)
-          & field @"fromInTarget" .~ ((<.> "cpp") <$> ["MMPlugin", "Base"])
-  let watsonPluginCPPIncludeListing =
-        (def :: CPPIncludeListing)
-          & field @"fromInTarget" .~ ["."]
+  -- sdk
   let sdkIncludes = (("sdk"</>"hl2sdk-tf2"</>"public") </>) <$> [".", "engine", "mathlib", "vstdlib", "tier0", "tier1", "game"</>"server"]
-  let watsonPluginCPPSysIncludeListing =
+  let sdkLibs = (("sdk"</>"hl2sdk-tf2"</>"lib"</>"mac") </>) <$> ["libtier0.dylib", "libvstdlib.dylib", "tier1_i486.a"]
+
+  -- watson
+  let watsonPluginDist = dircfg^.field @"dist"</>"plugin"
+  let watsonDistDir = watsonPluginDist</>"watson"
+  let watsonBinDir = watsonDistDir</>"bin"
+  let watsonVdf = watsonPluginDist</>"watson"<.>"vdf"
+
+  let watsonBaseDylib = watsonBinDir</>"base"<.>"dylib"
+  let watsonTestDylib = watsonBinDir</>"test"<.>"dylib"
+
+  let watsonCPPSysIncludeListing =
         (def :: CPPIncludeListing)
           & field @"fromWorld" .~ ["mmsource"</>"core", "mmsource"</>"core"</>"sourcehook"] ++ sdkIncludes
-  let watsonPluginCPPIncludeCfg =
-        (def :: CPPIncludeCfg)
-          & field @"warn" .~ watsonPluginCPPIncludeListing
-          & field @"noWarn" .~ watsonPluginCPPSysIncludeListing
-  let watsonPluginCPPObjBuildFlagCfg =
+  let watsonCPPObjBuildFlagCfg =
         defaultCPPObjectBuildFlagCfg
           & field @"common" <>~ (("-D"++) <$> ["POSIX", "OSX"])
           & field @"common" <>~ ((\x -> "-D" ++ x^.field @"define" ++ "=" ++ (show $ x^.field @"code")) <$> sdks)
@@ -57,43 +56,94 @@ main = shakeArgs (shakeOptions' (def :: DirCfg)) $ do
           & field @"common" <>~ (("-D"++) <$> ["_vsnprintf=vsnprintf", "stricmp=strcasecmp"])
 
           & field @"common" <>~ ["-m32"] -- todo: do this only for x86 targets
-  let watsonPluginCPPObjBuildCfg =
-        (def :: CPPObjBuildCfg)
-          & field @"target" .~ watsonPluginCPPTargetCfg
-          & field @"srcs" .~ watsonPluginCPPSourceCfg
-          & field @"includes" .~ watsonPluginCPPIncludeCfg
-          & field @"flags" .~ watsonPluginCPPObjBuildFlagCfg
-  genCPPObjBuildRules watsonPluginCPPObjBuildCfg
-
-  let watsonPluginCPPObjSourceCfg =
-        (def :: CPPObjSourceCfg)
-          & field @"fromCPPObjBuild" .~ [watsonPluginCPPObjBuildCfg]
-          & field @"fromWorld" .~ ((("sdk"</>"hl2sdk-tf2"</>"lib"</>"mac") </>) <$> ["libtier0.dylib", "libvstdlib.dylib", "tier1_i486.a"])
-  let watsonPluginCPPLinkBuildFlagCfg =
+  let watsonCPPLinkBuildFlagCfg =
         defaultCPPLinkBuildFlagCfg
           & field @"common" <>~ ["-dynamiclib"]
 
           & field @"common" <>~ ["-m32", "-arch", "i386"] -- todo: do this only for x86 targets
-  let watsonPluginCPPLinkBuildCfg =
+
+  linkToDistRules (dircfg^.field @"res"</>"watson.vdf") watsonVdf
+
+  phony watsonDistDir $ do
+    need [watsonBaseDylib, watsonTestDylib, watsonVdf]
+
+  want [watsonDistDir]
+
+  -- base
+  let watsonBaseCPPTargetCfg =
+        (def :: CPPTargetCfg)
+          & field @"name" .~ "base"
+          & field @"publicCPPObjs" .~ ["bin"<.>"dylib"]
+          & field @"publicIncludeDirs" .~ ["hpp"]
+  let watsonBaseCPPSourceCfg =
+        (def :: CPPSourceCfg)
+          & field @"fromInTarget" .~ ((<.> "cpp") <$> ["MMPlugin", "Base"])
+  let watsonBaseCPPIncludeListing =
+        (def :: CPPIncludeListing)
+          & field @"fromInTarget" .~ ["."]
+  let watsonBaseCPPIncludeCfg =
+        (def :: CPPIncludeCfg)
+          & field @"warn" .~ watsonBaseCPPIncludeListing
+          & field @"noWarn" .~ watsonCPPSysIncludeListing
+  let watsonBaseCPPObjBuildCfg =
+        (def :: CPPObjBuildCfg)
+          & field @"target" .~ watsonBaseCPPTargetCfg
+          & field @"srcs" .~ watsonBaseCPPSourceCfg
+          & field @"includes" .~ watsonBaseCPPIncludeCfg
+          & field @"flags" .~ watsonCPPObjBuildFlagCfg
+  genCPPObjBuildRules watsonBaseCPPObjBuildCfg
+
+  let watsonBaseCPPObjSourceCfg =
+        (def :: CPPObjSourceCfg)
+          & field @"fromCPPObjBuild" .~ [watsonBaseCPPObjBuildCfg]
+          & field @"fromWorld" .~ sdkLibs
+  let watsonBaseCPPLinkBuildCfg =
         (def :: CPPLinkBuildCfg)
           & field @"name" .~ "bin"<.>"dylib"
-          & field @"target" .~ watsonPluginCPPTargetCfg
-          & field @"objs" .~ watsonPluginCPPObjSourceCfg
-          & field @"flags" .~ watsonPluginCPPLinkBuildFlagCfg
-  genCPPLinkBuildRules watsonPluginCPPLinkBuildCfg
+          & field @"target" .~ watsonBaseCPPTargetCfg
+          & field @"objs" .~ watsonBaseCPPObjSourceCfg
+          & field @"flags" .~ watsonCPPLinkBuildFlagCfg
+  genCPPLinkBuildRules watsonBaseCPPLinkBuildCfg
 
-  let watsonPluginDistDir = dircfg^.field @"dist"</>"watson"
-  let watsonPluginBinDir = watsonPluginDistDir</>"bin"
-  let watsonPluginBaseDylib = watsonPluginBinDir</>"base"<.>"dylib"
-  let watsonPluginVdf = dircfg^.field @"dist"</>"watson"<.>"vdf"
+  linkToDistRules (getCPPLinkPrimaryBuildOut watsonBaseCPPLinkBuildCfg) watsonBaseDylib
 
-  linkToDistRules (getCPPLinkPrimaryBuildOut watsonPluginCPPLinkBuildCfg) watsonPluginBaseDylib
-  linkToDistRules (dircfg^.field @"res"</>"watson.vdf") watsonPluginVdf
+  -- test
+  let watsonTestCPPTargetCfg =
+        (def :: CPPTargetCfg)
+          & field @"name" .~ "test"
+  let watsonTestCPPSourceCfg =
+        (def :: CPPSourceCfg)
+          & field @"fromInTarget" .~ ((<.> "cpp") <$> ["test"])
+  let watsonTestCPPIncludeListing =
+        (def :: CPPIncludeListing)
+          & field @"fromInTarget" .~ ["."]
+          & field @"fromOtherTarget" .~ [watsonBaseCPPTargetCfg]
+  let watsonTestCPPIncludeCfg =
+        (def :: CPPIncludeCfg)
+          & field @"warn" .~ watsonTestCPPIncludeListing
+          & field @"noWarn" .~ watsonCPPSysIncludeListing
+  let watsonTestCPPObjBuildCfg =
+        (def :: CPPObjBuildCfg)
+          & field @"target" .~ watsonTestCPPTargetCfg
+          & field @"srcs" .~ watsonTestCPPSourceCfg
+          & field @"includes" .~ watsonTestCPPIncludeCfg
+          & field @"flags" .~ watsonCPPObjBuildFlagCfg
+  genCPPObjBuildRules watsonTestCPPObjBuildCfg
 
-  phony watsonPluginDistDir $ do
-    need [watsonPluginBaseDylib, watsonPluginVdf]
+  let watsonTestCPPObjSourceCfg =
+        (def :: CPPObjSourceCfg)
+          & field @"fromCPPObjBuild" .~ [watsonTestCPPObjBuildCfg]
+          & field @"fromCPPLinkBuild" .~ [watsonBaseCPPLinkBuildCfg]
+          & field @"fromWorld" .~ sdkLibs
+  let watsonTestCPPLinkBuildCfg =
+        (def :: CPPLinkBuildCfg)
+          & field @"name" .~ "bin"<.>"dylib"
+          & field @"target" .~ watsonTestCPPTargetCfg
+          & field @"objs" .~ watsonTestCPPObjSourceCfg
+          & field @"flags" .~ watsonCPPLinkBuildFlagCfg
+  genCPPLinkBuildRules watsonTestCPPLinkBuildCfg
 
-  want [watsonPluginDistDir]
+  linkToDistRules (getCPPLinkPrimaryBuildOut watsonTestCPPLinkBuildCfg) watsonTestDylib
 
   return ()
 
@@ -165,6 +215,25 @@ sdks = [
     SDKData {name = "csgo",        folder = "csgo",        define = "SE_CSGO",           code = 21, platform = csgoSDKPlatforms},
     SDKData {name = "dota",        folder = "dota",        define = "SE_DOTA",           code = 22, platform = source2SDKPlatforms}
   ]
+
+{-
+
+ToDo:
+- CPP: Check that CPPTargets' public outputs are actually produced
+- CPP: Depend on separate CPP headers
+- CPP: Depend on system libraries
+- CPP: Add precompiled headers
+- CPP: Add compile_commands generation
+- Take clangCompDB out of ProjectCfg
+- Look into record inheritance
+- Allow querying actual outputs of targets for dependencies
+- Allow for platform-specific compilation
+- Look into proper named parameters
+- Look into namespacing
+- Handle dist outputs better
+- Make a proper library out of this file
+
+-}
 
 shakeOptions' :: DirCfg -> ShakeOptions
 shakeOptions' dc = shakeOptions{
@@ -242,7 +311,7 @@ cppIncludeListingToPaths tcfg ilist =
     includePathsForTarget :: CPPTargetCfg -> [FilePath]
     includePathsForTarget tcfg =
       let dircfg = dircfgForCPPTarget tcfg
-      in (dircfg^.field @"dist" </>) <$> tcfg^.field @"publicIncludeDirs"
+      in (dircfg^.field @"src" </>) <$> tcfg^.field @"publicIncludeDirs"
 
 data CPPIncludeCfg = CPPIncludeCfg {
   warn :: CPPIncludeListing,
@@ -297,7 +366,7 @@ cppSourceCfgToPatterns tcfg cfg =
     srcPatternsForTarget :: CPPTargetCfg -> [String]
     srcPatternsForTarget tcfg =
       let dircfg = dircfgForCPPTarget tcfg
-      in (dircfg^.field @"dist" </>) <$> tcfg^.field @"publicCPPSources"
+      in (dircfg^.field @"bld" </>) <$> tcfg^.field @"publicCPPSources"
 cppSourceCfgToPaths :: CPPTargetCfg -> CPPSourceCfg -> IO [FilePath]
 cppSourceCfgToPaths tcfg cfg =
   dedup <$> join <$> globDir (cppSourceCfgToPatterns tcfg cfg) "."
@@ -389,7 +458,7 @@ dircfgForCPPObjBuild cfg =
 
 data CPPObjSourceCfg = CPPObjSourceCfg {
   fromInTarget :: [FilePath],
-  fromOtherTarget :: [CPPTargetCfg],
+  fromCPPLinkBuild :: [CPPLinkBuildCfg],
   fromWorld :: [FilePath],
   fromUnportablePath :: [FilePath],
   fromCPPObjBuild :: [CPPObjBuildCfg]
@@ -399,7 +468,7 @@ cppObjSourceCfgToPaths tcfg cfg = do
   cppObjBuildOuts <- mapM findCPPObjectBuildOuts (cfg^.field @"fromCPPObjBuild")
   return . join $
     [(tdircfg^.field @"src"</>) <$> (cfg^.field @"fromInTarget")] ++
-    (objPathsForTarget <$> (cfg^.field @"fromOtherTarget")) ++
+    (objPathsForLinkBuild <$> (cfg^.field @"fromCPPLinkBuild")) ++
     [(tdircfg^.field @"world"</>) <$> (cfg^.field @"fromWorld")] ++
     [cfg^.field @"fromUnportablePath"] ++
     cppObjBuildOuts
@@ -407,10 +476,10 @@ cppObjSourceCfgToPaths tcfg cfg = do
     tdircfg :: DirCfg
     tdircfg = dircfgForCPPTarget tcfg
 
-    objPathsForTarget :: CPPTargetCfg -> [FilePath]
-    objPathsForTarget tcfg =
-      let dircfg = dircfgForCPPTarget tcfg
-      in (dircfg^.field @"dist" </>) <$> tcfg^.field @"publicCPPObjs"
+    objPathsForLinkBuild :: CPPLinkBuildCfg -> [FilePath]
+    objPathsForLinkBuild cfg =
+      let dircfg = dircfgForCPPLinkBuild cfg
+      in (dircfg^.field @"bld" </>) <$> cfg^.field @"target".field @"publicCPPObjs"
 
 
 data CPPLibSearchPathCfg = CPPLibSearchPathCfg {
